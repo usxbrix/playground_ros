@@ -36,6 +36,9 @@ class ObjectTracker():
         # Set the shutdown function (stop the robot)
         rospy.on_shutdown(self.shutdown)
         
+        # What (class) should be tracked?
+        self.track = rospy.get_param("~track", "person")
+        
         # How often should we update the robot's motion?
         self.rate = rospy.get_param("~rate", 10)
         r = rospy.Rate(self.rate) 
@@ -121,7 +124,7 @@ class ObjectTracker():
         try:
             for dobj in msg.objects:
                 rospy.loginfo(dobj.class_name)
-                if dobj.x_max == 0 or dobj.y_max == 0 or dobj.class_name <> 'person':
+                if dobj.x_max == 0 or dobj.y_max == 0 or dobj.class_name <> self.track:
                    self.target_visible = False
                    #return
                    continue

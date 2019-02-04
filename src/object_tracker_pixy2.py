@@ -77,6 +77,9 @@ class ObjectTracker():
         # Set flag to indicate when the ROI stops updating
         self.target_visible = False
         
+        # Timestamp for last target
+        self.last_target_time = 0
+        
         # Wait for the camera_info topic to become available
         # rospy.loginfo("Waiting for camera_info topic...")
         rospy.loginfo("Waiting for pixy resolution topic...")
@@ -109,7 +112,15 @@ class ObjectTracker():
             try:
                 # If the target is not visible, stop the robot
                 if not self.target_visible:
-                    self.move_cmd = Twist()
+                    # Search if no target
+                    duration = self.last_target_time - rospy.Time.now()
+                    if duration.to_sec() > 5:
+                        rospy.loginfo("SEARCHING: No target for %d sec...")
+                        # Rotate to find target
+                        self.move_cmd.angular.z = self.min_rotation_speed
+                    else:
+                        self.move_cmd = Twist()
+        
                 else:
                     # Reset the flag to False by default
                     self.target_visible = False
@@ -138,6 +149,9 @@ class ObjectTracker():
                 
                 # If the ROI stops updating this next statement will not happen
                 self.target_visible = True
+
+                # set timestamp if target is available
+                self.last_target_time = rospy.Time.now()
 
                 self.ring_buffer_x.append(block.roi.x_offset)
                 avg_x = sum(self.ring_buffer_x)/20

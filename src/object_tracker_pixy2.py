@@ -121,10 +121,8 @@ class ObjectTracker():
                     # Search if no target
                     duration = rospy.Time.now() - self.last_target_time 
 
-                    print duration.to_sec()
-
                     if duration.to_sec() > 5:
-                        rospy.loginfo("SEARCHING: No target for %d sec...")
+                        rospy.loginfo("SEARCHING: No target for %d sec...", duration.to_sec())
                         # Rotate to find target
                         self.move_cmd.angular.z = self.min_rotation_speed
                     else:

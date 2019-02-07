@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 
 """
+    object_tracker_pixy2.py - Version 2.0 2019 
+
+    based on:
+    
     object_tracker.py - Version 1.1 2013-12-20
     
     Rotate the robot left or right to follow a target published on the /roi topic.
@@ -33,6 +37,8 @@ import collections
 
 class ObjectTracker():
     def __init__(self):
+
+        # ring buffer to get average of x_offset
         self.ring_buffer_x = collections.deque(maxlen=20)
 
         rospy.init_node("object_tracker")
@@ -78,7 +84,7 @@ class ObjectTracker():
         self.target_visible = False
         
         # Timestamp for last target
-        self.last_target_time = 0
+        self.last_target_time = rospy.Time()
         
         # Wait for the camera_info topic to become available
         # rospy.loginfo("Waiting for camera_info topic...")
@@ -113,7 +119,10 @@ class ObjectTracker():
                 # If the target is not visible, stop the robot
                 if not self.target_visible:
                     # Search if no target
-                    duration = self.last_target_time - rospy.Time.now()
+                    duration = rospy.Time.now() - self.last_target_time 
+
+                    print duration.to_sec()
+
                     if duration.to_sec() > 5:
                         rospy.loginfo("SEARCHING: No target for %d sec...")
                         # Rotate to find target
@@ -143,9 +152,10 @@ class ObjectTracker():
             for block in msg.blocks:
                 # rospy.loginfo(block.signature)
                 if block.roi.height < 5 or block.roi.width < 5 or block.signature <> self.track:
-                   self.target_visible = False
-                   #return
-                   continue
+                    rospy.loginfo("SKIPPING %s id: %d age: %d" , block.signature, block.index, block.age )
+                    self.target_visible = False
+                    #return
+                    continue
                 
                 # If the ROI stops updating this next statement will not happen
                 self.target_visible = True
@@ -164,7 +174,7 @@ class ObjectTracker():
                     percent_offset_x = float(target_offset_x) / (float(self.image_width) / 2.0)
                 except:
                     percent_offset_x = 0
-                rospy.loginfo("Detected: %s at %d pixel (%d%%)", block.signature, target_offset_x, percent_offset_x*100)
+                rospy.loginfo("Detected: %s id: %d age: %d at %d pixel (%d%%) width: %d height: %d", block.signature, block.index, block.age, target_offset_x, percent_offset_x*100, block.roi.height, block.roi.width)
                 # Rotate the robot only if the displacement of the target exceeds the threshold
                 if abs(percent_offset_x) > self.x_threshold:
                     # Set the rotation speed proportional to the displacement of the target

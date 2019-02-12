@@ -68,7 +68,7 @@ class ObjectTracker():
         self.x_threshold = rospy.get_param("~x_threshold", 0.1)
 
         # Publisher to control the robot's movement
-        self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=5)
+        self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
         
         # Intialize the movement command
         self.move_cmd = Twist()
@@ -171,6 +171,7 @@ class ObjectTracker():
                 try:
                     percent_offset_x = float(target_offset_x) / (float(self.image_width) / 2.0)
                 except:
+                    rospy.loginfo("EXCEPTION percent_offset_x")
                     percent_offset_x = 0
                 rospy.loginfo("Detected: %s id: %d age: %d at %d pixel (%d%%) width: %d height: %d", block.signature, block.index, block.age, target_offset_x, percent_offset_x*100, block.roi.height, block.roi.width)
                 # Rotate the robot only if the displacement of the target exceeds the threshold
@@ -185,6 +186,7 @@ class ObjectTracker():
                         self.move_cmd.angular.z = -direction * max(self.min_rotation_speed,
                                                     min(self.max_rotation_speed, abs(speed)))
                     except:
+                        rospy.loginfo("EXCEPTION speed move")
                         self.move_cmd = Twist()
                 else:
                     # Otherwise stop the robot

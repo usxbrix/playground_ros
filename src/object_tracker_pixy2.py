@@ -35,11 +35,13 @@ from pixy2_msgs.msg import PixyBlock, PixyData, PixyResolution
 import thread
 import collections
 
+RINGBUFFER = 10
+
 class ObjectTracker():
     def __init__(self):
 
         # ring buffer to get average of x_offset
-        self.ring_buffer_x = collections.deque(maxlen=20)
+        self.ring_buffer_x = collections.deque(maxlen=RINGBUFFER)
 
         rospy.init_node("object_tracker")
                 
@@ -162,7 +164,8 @@ class ObjectTracker():
                 self.last_target_time = rospy.Time.now()
 
                 self.ring_buffer_x.append(block.roi.x_offset)
-                avg_x = sum(self.ring_buffer_x)/20
+                
+                avg_x = sum(self.ring_buffer_x)/RINGBUFFER
                 # Compute the displacement of the ROI from the center of the image
                 # target_offset_x = msg.x_offset + msg.width / 2 - self.image_width / 2
                 # target_offset_x = block.roi.x_offset - self.image_width / 2

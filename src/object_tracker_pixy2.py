@@ -35,13 +35,8 @@ from pixy2_msgs.msg import PixyBlock, PixyData, PixyResolution
 import thread
 import collections
 
-RINGBUFFER = 10
-
 class ObjectTracker():
     def __init__(self):
-
-        # ring buffer to get average of x_offset
-        self.ring_buffer_x = collections.deque(maxlen=RINGBUFFER)
 
         rospy.init_node("object_tracker")
                 
@@ -68,6 +63,15 @@ class ObjectTracker():
         # The x threshold (% of image width) indicates how far off-center
         # the ROI needs to be in the x-direction before we react
         self.x_threshold = rospy.get_param("~x_threshold", 0.1)
+
+        # size of ring buffer to calculate average offset
+        self.ring_buffer_size = rospy.get_param("~ring_buffer_size", 1)
+
+        # ring buffer to get average of x_offset
+        self.ring_buffer_x = collections.deque(maxlen=self.ring_buffer_size)
+
+        # time before starting to search a target
+        self.search_delay = rospy.get_param("~search_delay", 1)
 
         # Publisher to control the robot's movement
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
@@ -123,7 +127,7 @@ class ObjectTracker():
                     # Search if no target
                     duration = rospy.Time.now() - self.last_target_time 
 
-                    if duration.to_sec() > 5:
+                    if duration.to_sec() > self.search_delay:
                         rospy.loginfo("SEARCHING: No target for %d sec...", duration.to_sec())
                         # Rotate to find target
                         self.move_cmd.angular.z = self.min_rotation_speed
@@ -165,7 +169,7 @@ class ObjectTracker():
 
                 self.ring_buffer_x.append(block.roi.x_offset)
                 
-                avg_x = sum(self.ring_buffer_x)/RINGBUFFER
+                avg_x = sum(self.ring_buffer_x)/self.ring_buffer_size
                 # Compute the displacement of the ROI from the center of the image
                 # target_offset_x = msg.x_offset + msg.width / 2 - self.image_width / 2
                 # target_offset_x = block.roi.x_offset - self.image_width / 2

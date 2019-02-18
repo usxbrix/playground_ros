@@ -39,8 +39,7 @@ import collections
 class ObjectTracker():
     def __init__(self):
 
-        # ring buffer to get average of x_offset
-        self.ring_buffer_x = collections.deque(maxlen=20)
+        
 
         rospy.init_node("object_tracker")
                 
@@ -95,6 +94,15 @@ class ObjectTracker():
         # Slow down factor when stopping
         self.slow_down_factor = rospy.get_param("~slow_down_factor", 0.8)
 
+        # size of ring buffer to calculate average offset
+        self.ring_buffer_size = rospy.get_param("~ring_buffer_size", 1)
+
+        # ring buffer to get average of x_offset
+        self.ring_buffer_x = collections.deque(maxlen=self.ring_buffer_size)
+
+        # time before starting to search a target
+        self.search_delay = rospy.get_param("~search_delay", 1)
+
         # Publisher to control the robot's movement
         self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
         
@@ -135,10 +143,10 @@ class ObjectTracker():
         # Wait for the depth image to become available
         rospy.loginfo("Waiting for range topic...")
         
-        rospy.wait_for_message('range', Range)
+        rospy.wait_for_message('sonars', Range)
                     
         # Subscribe to the depth image
-        self.range_subscriber = rospy.Subscriber("range", Range, self.update_range, queue_size=1)
+        self.range_subscriber = rospy.Subscriber("sonars", Range, self.update_range, queue_size=1)
 
         # Subscribe to the ROI topic and set the callback to update the robot's motion
         # rospy.Subscriber('roi', RegionOfInterest, self.set_cmd_vel, queue_size=1)
@@ -161,16 +169,20 @@ class ObjectTracker():
                     # Search if no target
                     duration = rospy.Time.now() - self.last_target_time 
 
-                    if duration.to_sec() > 5:
+                    if duration.to_sec() > self.search_delay:
                         rospy.loginfo("SEARCHING: No target for %d sec...", duration.to_sec())
                         # Rotate to find target
+                        self.move_cmd = Twist()
                         self.move_cmd.angular.z = self.min_rotation_speed
                     else:
+                        rospy.loginfo("NO TARGET for %d sec...", duration.to_sec())
                         self.move_cmd = Twist()
         
-                else:
-                    # Reset the flag to False by default
-                    self.target_visible = False
+                # else:
+                #     # Reset the flag to False by default
+                #     if (rospy.Time.now().to_sec() % 5) == 0:
+                #         rospy.loginfo("FALSE for ")
+                #         self.target_visible = False
                     
                 # Send the Twist command to the robot
                 self.cmd_vel_pub.publish(self.move_cmd)
@@ -187,13 +199,17 @@ class ObjectTracker():
         self.lock.acquire()
         
         try:
-            for block in msg.blocks:
+            #for block in msg.blocks:
+            #if len(msg.blocks) > 0 and msg.blocks[0].age > 5 and msg.blocks[0].signature == self.track:
+            if len(msg.blocks) > 0 and msg.blocks[0].signature == self.track:
+                #return blocks[0].index
+                block = msg.blocks[0]
                 # rospy.loginfo(block.signature)
                 if block.roi.height < 5 or block.roi.width < 5 or block.signature <> self.track:
                     rospy.loginfo("SKIPPING %s id: %d age: %d" , block.signature, block.index, block.age )
                     self.target_visible = False
-                    #return
-                    continue
+                    return
+                    #continue
                 
                 # If the ROI stops updating this next statement will not happen
                 self.target_visible = True
@@ -202,7 +218,7 @@ class ObjectTracker():
                 self.last_target_time = rospy.Time.now()
 
                 self.ring_buffer_x.append(block.roi.x_offset)
-                avg_x = sum(self.ring_buffer_x)/20
+                avg_x = sum(self.ring_buffer_x)/self.ring_buffer_size
                 # Compute the displacement of the ROI from the center of the image
                 # target_offset_x = msg.x_offset + msg.width / 2 - self.image_width / 2
                 # target_offset_x = block.roi.x_offset - self.image_width / 2
@@ -213,7 +229,7 @@ class ObjectTracker():
                 except:
                     rospy.loginfo("EXCEPTION percent_offset_x")
                     percent_offset_x = 0
-                rospy.loginfo("Detected: %s id: %d age: %d at %d pixel (%d%%) width: %d height: %d", block.signature, block.index, block.age, target_offset_x, percent_offset_x*100, block.roi.height, block.roi.width)
+                rospy.loginfo("Detected: %s id: %d age: %d at %d pixel (%d%%) width: %d height: %d range: %f", block.signature, block.index, block.age, target_offset_x, percent_offset_x*100, block.roi.height, block.roi.width, self.range)
                 # Rotate the robot only if the displacement of the target exceeds the threshold
                 if abs(percent_offset_x) > self.x_threshold:
                     # Set the rotation speed proportional to the displacement of the target
@@ -223,6 +239,7 @@ class ObjectTracker():
                             direction = -1
                         else:
                             direction = 1
+                        self.move_cmd = Twist()
                         self.move_cmd.angular.z = -direction * max(self.min_rotation_speed,
                                                     min(self.max_rotation_speed, abs(speed)))
                     except:
@@ -233,25 +250,28 @@ class ObjectTracker():
                     #self.move_cmd = Twist()
                     self.move_cmd.angular.z = 0
 
-            # Stop the robot's forward/backward motion by default
-            linear_x = 0
-            
-                                                 
-            # Don't let the mean fall below the minimum reliable range
-            # mean_z = max(self.min_z, mean_z)
+                    # Stop the robot's forward/backward motion by default
+                    linear_x = 0
+                    
                                                         
-            # Check the mean against the minimum range
-            if self.range > self.min_z:
-                # Check the max range and goal threshold
-                if self.range < self.max_z and (abs(self.range - self.goal_z) > self.z_threshold):
-                    speed = (self.range - self.goal_z) * self.z_scale
-                    linear_x = copysign(min(self.max_linear_speed, max(self.min_linear_speed, abs(speed))), speed)
-    
-            if linear_x == 0:
-                # Stop the robot smoothly
-                self.move_cmd.linear.x *= self.slow_down_factor
+                    # Don't let the mean fall below the minimum reliable range
+                    # mean_z = max(self.min_z, mean_z)
+                                                                
+                    # Check the mean against the minimum range
+                    if self.range > self.min_z:
+                        # Check the max range and goal threshold
+                        if self.range < self.max_z and (abs(self.range - self.goal_z) > self.z_threshold):
+                            speed = (self.range - self.goal_z) * self.z_scale
+                            linear_x = copysign(min(self.max_linear_speed, max(self.min_linear_speed, abs(speed))), speed)
+            
+                    if linear_x == 0:
+                        # Stop the robot smoothly
+                        self.move_cmd.linear.x *= self.slow_down_factor
+                    else:
+                        self.move_cmd.linear.x = linear_x
             else:
-                self.move_cmd.linear.x = linear_x
+                rospy.loginfo("NO TARGET IN BLOCK")
+                self.target_visible = False
 
         finally:
             # Release the lock

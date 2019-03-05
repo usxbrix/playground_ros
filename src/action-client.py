@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 import rospy
-from __future__ import print_function
+
 
 # Brings in the SimpleActionClient
 import actionlib
@@ -13,7 +13,7 @@ import playground_ros.msg
 def follow_client():
     # Creates the SimpleActionClient, passing the type of the action
     # (FollowAction) to the constructor.
-    client = actionlib.SimpleActionClient('follow', playground_ros.msg.FollowAction)
+    client = actionlib.SimpleActionClient('object_follow_action', playground_ros.msg.FollowAction)
 
     # Waits until the action server has started up and started
     # listening for goals.
@@ -39,4 +39,4 @@ if __name__ == '__main__':
         result = follow_client()
         print("Result:", ', ', result.outcome)
     except rospy.ROSInterruptException:
-        print("program interrupted before completion", file=sys.stderr)
+        print("program interrupted before completion")

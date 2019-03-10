@@ -108,7 +108,7 @@ class FollowAction(object):
 
         # Subscribe to the ROI topic and set the callback to update the robot's motion
         # rospy.Subscriber('roi', RegionOfInterest, self.set_cmd_vel, queue_size=1)
-        rospy.Subscriber('block_data', PixyData, self.set_cmd_vel, queue_size=1)
+        rospy.Subscriber('block_data', PixyData, self.update_block, queue_size=1)
         
         # Wait until we have an ROI to follow
         rospy.loginfo("Waiting for messages on /block_data...")
@@ -171,8 +171,8 @@ class FollowAction(object):
         # ring buffer to get average of x_offset
         self.ring_buffer_x = collections.deque(maxlen=self.ring_buffer_size)
 
-        # time before starting to search a target
-        self.search_delay = rospy.get_param("~search_delay", 1)
+        # timeout before canceling follow if no target
+        self.follow_timeout = rospy.get_param("~follow_timeout", 1)
 
     def update_block(self, msg):
         #for block in msg.blocks:
@@ -193,20 +193,23 @@ class FollowAction(object):
 
                 # set global ROI from PixyData
                 self.roi = block.roi
+        else:
+            self.target_visible = False
 
-    def set_cmd_vel(self, msg):
+    def set_cmd_vel(self):
         # Acquire a lock while we're setting the robot speeds
         self.lock.acquire()
         
         try:
+            if self.target_visible:
 
-
-                self.ring_buffer_x.append(block.roi.x_offset)
-                avg_x = sum(self.ring_buffer_x)/self.ring_buffer_size
+                # self.ring_buffer_x.append(self.roi.x_offset)
+                # avg_x = sum(self.ring_buffer_x)/self.ring_buffer_size
                 # Compute the displacement of the ROI from the center of the image
                 # target_offset_x = msg.x_offset + msg.width / 2 - self.image_width / 2
                 # target_offset_x = block.roi.x_offset - self.image_width / 2
-                target_offset_x = avg_x - self.image_width / 2
+                # target_offset_x = avg_x - self.image_width / 2
+                target_offset_x = self.roi.x_offset - self.image_width / 2
     
                 try:
                     percent_offset_x = float(target_offset_x) / (float(self.image_width) / 2.0)
@@ -230,18 +233,15 @@ class FollowAction(object):
                         rospy.loginfo("EXCEPTION speed move")
                         self.move_cmd = Twist()
                 else:
-                    # Otherwise stop the robot
-                    #self.move_cmd = Twist()
+                    # Stop rotation
+                    
                     self.move_cmd.angular.z = 0
 
                     # Stop the robot's forward/backward motion by default
                     linear_x = 0
-                    
-                                                        
-                    # Don't let the mean fall below the minimum reliable range
-                    # mean_z = max(self.min_z, mean_z)
+                
                                                                 
-                    # Check the mean against the minimum range
+                    # Check the current range against the minimum range
                     if self.range > self.min_z:
                         # Check the max range and goal threshold
                         if self.range < self.max_z and (abs(self.range - self.goal_z) > self.z_threshold):
@@ -254,14 +254,13 @@ class FollowAction(object):
                     else:
                         self.move_cmd.linear.x = linear_x
             else:
-                rospy.loginfo("NO TARGET IN BLOCK")
+                rospy.loginfo("NO TARGET IN ROI")
                 self.target_visible = False
 
         finally:
             # Release the lock
             self.lock.release()
             
-  
 
     def update_range(self, msg):
         self.range = msg.range
@@ -309,28 +308,17 @@ class FollowAction(object):
             rospy.loginfo('%s: Succeeded' % self._action_name)
             self._as.set_succeeded(self._result)
 
-class ObjectTracker():
-    def __init__(self):
 
-                
-
-        
+    def execute_cb_follow(self):
 
         r = rospy.Rate(self.rate) 
-        
- 
-    
-        
-
-        
-
-        
- 
-        
+           
         # Begin the tracking loop
         while not rospy.is_shutdown():
             # Acquire a lock while we're setting the robot speeds
             self.lock.acquire()
+
+            self.set_cmd_vel()
             
             try:
                 # If the target is not visible, stop the robot
@@ -338,11 +326,11 @@ class ObjectTracker():
                     # Search if no target
                     duration = rospy.Time.now() - self.last_target_time 
 
-                    if duration.to_sec() > self.search_delay:
-                        rospy.loginfo("SEARCHING: No target for %d sec...", duration.to_sec())
+                    if duration.to_sec() > self.follow_timeout:
+                        rospy.loginfo("CAN'T FOLLOW: No target for %d sec...", duration.to_sec())
                         # Rotate to find target
                         self.move_cmd = Twist()
-                        self.move_cmd.angular.z = self.min_rotation_speed
+                        # self.move_cmd.angular.z = self.min_rotation_speed
                     else:
                         rospy.loginfo("NO TARGET for %d sec...", duration.to_sec())
                         self.move_cmd = Twist()
@@ -378,5 +366,9 @@ if __name__ == '__main__':
     rospy.loginfo("object_follow_action node started")
     rospy.loginfo(rospy.get_caller_id() + " object_follow_action node started")
     server = FollowAction(rospy.get_name())
+
+    # test following
+    server.execute_cb_follow()
+    
     rospy.spin()
 

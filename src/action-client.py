@@ -6,6 +6,8 @@ import rospy
 # Brings in the SimpleActionClient
 import actionlib
 
+import Adafruit_BBIO.GPIO as GPIO
+
 # Brings in the messages used by the follow action, including the
 # goal message and the result message.
 import playground_ros.msg
@@ -36,6 +38,16 @@ if __name__ == '__main__':
         # Initializes a rospy node so that the SimpleActionClient can
         # publish and subscribe over ROS.
         rospy.init_node('follow_client_py')
+        r = rospy.Rate(1)
+        #GPIO.setup("P8_14", GPIO.IN)
+
+        GPIO.add_event_detect("MODE", GPIO.RISING) 
+        while not rospy.is_shutdown():
+            if GPIO.event_detected("MODE"):
+                print("MODE PUSHED")
+            
+            r.sleep()
+
         result = follow_client()
         print("Result:", ', ', result.outcome)
     except rospy.ROSInterruptException:

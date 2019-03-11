@@ -312,13 +312,29 @@ class FollowAction(object):
     def execute_cb_follow(self):
 
         r = rospy.Rate(self.rate) 
+        
+        success = True
+        
+        # append the seeds for the fibonacci sequence
+        self._feedback.status = "FEEDBACK " + `goal.signature` 
+
+        
+        # publish info to the console for the user
+        rospy.loginfo('%s: Executing, FollowAction of signature %i with feedback: %s' % (self._action_name, goal.signature, self._feedback.status))
            
         # Begin the tracking loop
         while not rospy.is_shutdown():
             # Acquire a lock while we're setting the robot speeds
             self.lock.acquire()
 
+            if self._as.is_preempt_requested():
+                rospy.loginfo('%s: Preempted' % self._action_name)
+                self._as.set_preempted()
+                success = False
+                break
+
             self.set_cmd_vel()
+
             
             try:
                 # If the target is not visible, stop the robot
@@ -327,22 +343,28 @@ class FollowAction(object):
                     duration = rospy.Time.now() - self.last_target_time 
 
                     if duration.to_sec() > self.follow_timeout:
-                        rospy.loginfo("CAN'T FOLLOW: No target for %d sec...", duration.to_sec())
+                        rospy.loginfo("CANCEL FOLLOWING: No target for %d sec...", duration.to_sec())
                         # Rotate to find target
                         self.move_cmd = Twist()
                         # self.move_cmd.angular.z = self.min_rotation_speed
+                        success = False
                     else:
-                        rospy.loginfo("NO TARGET for %d sec...", duration.to_sec())
+                        rospy.loginfo("WAITING FOR TARGET since %d sec...", duration.to_sec())
+                        self._feedback.status = "WAITING FOR TARGET since"
                         self.move_cmd = Twist()
         
-                # else:
+                else:
                 #     # Reset the flag to False by default
                 #     if (rospy.Time.now().to_sec() % 5) == 0:
                 #         rospy.loginfo("FALSE for ")
                 #         self.target_visible = False
+                    self._feedback.status = "FOLLOWING goal.signature "
                     
                 # Send the Twist command to the robot
                 self.cmd_vel_pub.publish(self.move_cmd)
+
+                # publish the feedback
+                self._as.publish_feedback(self._feedback)
                 
             finally:
                 # Release the lock
@@ -350,6 +372,11 @@ class FollowAction(object):
                 
             # Sleep for 1/self.rate seconds
             r.sleep()
+        
+        if success:
+            self._result.outcome = self._feedback.status
+            rospy.loginfo('%s: Succeeded' % self._action_name)
+            self._as.set_succeeded(self._result)
 
 
 

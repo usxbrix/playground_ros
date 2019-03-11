@@ -156,6 +156,20 @@ include_directories(
 #   ${catkin_LIBRARIES}
 # )
 
+add_executable(follow_client_cpp src/action-client.cpp)
+
+target_link_libraries( 
+  follow_client_cpp
+  ${catkin_LIBRARIES}
+  robotcontrol
+)
+
+add_dependencies(
+  follow_client_cpp
+  ${actionlib_tutorials_EXPORTED_TARGETS}
+)
+
+
 #############
 ## Install ##
 #############

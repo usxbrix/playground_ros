@@ -106,15 +106,15 @@ class FollowAction(object):
         # Subscribe to the depth image
         self.range_subscriber = rospy.Subscriber("sonars", Range, self.update_range, queue_size=1)
 
-        # Subscribe to the ROI topic and set the callback to update the robot's motion
+        # Subscribe to the block_data topic and set the callback to update the robot's motion
         # rospy.Subscriber('roi', RegionOfInterest, self.set_cmd_vel, queue_size=1)
         rospy.Subscriber('block_data', PixyData, self.update_block, queue_size=1)
         
-        # Wait until we have an ROI to follow
+        # Wait until we have a block_data to follow
         rospy.loginfo("Waiting for messages on /block_data...")
         rospy.wait_for_message('block_data', PixyData)
         
-        rospy.loginfo("ROI messages detected. Starting tracker...")
+        rospy.loginfo("block_data messages detected. Starting tracker...")
     
     def load_params(self):
         
@@ -177,6 +177,7 @@ class FollowAction(object):
     def update_block(self, msg):
         #for block in msg.blocks:
         #if len(msg.blocks) > 0 and msg.blocks[0].age > 5 and msg.blocks[0].signature == self.track:
+        
         if len(msg.blocks) > 0 and msg.blocks[0].signature == self.track:
             #return blocks[0].index
             block = msg.blocks[0]
@@ -187,6 +188,7 @@ class FollowAction(object):
             else:        
                 # If the ROI stops updating this next statement will not happen
                 self.target_visible = True
+                rospy.loginfo_throttle(1,"TARGET IN BLOCK")
 
                 # set timestamp if target is available
                 self.last_target_time = rospy.Time.now()
@@ -194,12 +196,11 @@ class FollowAction(object):
                 # set global ROI from PixyData
                 self.roi = block.roi
         else:
+            rospy.loginfo_throttle(1,"NO TARGET IN BLOCK")
             self.target_visible = False
 
     def set_cmd_vel(self):
-        # Acquire a lock while we're setting the robot speeds
-        #self.lock.acquire()
-        rospy.loginfo("set_cmd_vel called")
+        
         try:
             if self.target_visible:
 
@@ -210,13 +211,13 @@ class FollowAction(object):
                 # target_offset_x = block.roi.x_offset - self.image_width / 2
                 # target_offset_x = avg_x - self.image_width / 2
                 target_offset_x = self.roi.x_offset - self.image_width / 2
-    
+                
                 try:
                     percent_offset_x = float(target_offset_x) / (float(self.image_width) / 2.0)
                 except:
                     rospy.loginfo("EXCEPTION percent_offset_x")
                     percent_offset_x = 0
-                rospy.loginfo("Detected: %s id: %d age: %d at %d pixel (%d%%) width: %d height: %d range: %f", block.signature, block.index, block.age, target_offset_x, percent_offset_x*100, block.roi.height, block.roi.width, self.range)
+                rospy.loginfo("Detected: %d pixel (%d%%) width: %d height: %d range: %f", target_offset_x, percent_offset_x*100, self.roi.height, self.roi.width, self.range)
                 # Rotate the robot only if the displacement of the target exceeds the threshold
                 if abs(percent_offset_x) > self.x_threshold:
                     # Set the rotation speed proportional to the displacement of the target
@@ -234,13 +235,11 @@ class FollowAction(object):
                         self.move_cmd = Twist()
                 else:
                     # Stop rotation
-                    
                     self.move_cmd.angular.z = 0
 
                     # Stop the robot's forward/backward motion by default
                     linear_x = 0
-                
-                                                                
+                                                                               
                     # Check the current range against the minimum range
                     if self.range > self.min_z:
                         # Check the max range and goal threshold
@@ -254,13 +253,12 @@ class FollowAction(object):
                     else:
                         self.move_cmd.linear.x = linear_x
             else:
-                rospy.loginfo("NO TARGET IN ROI")
+                rospy.loginfo_throttle(1,"NO TARGET IN ROI")
                 self.target_visible = False
 
         finally:
-            # Release the lock
-            #self.lock.release()
-            rospy.loginfo("set_cmd_vel finally")
+            #rospy.loginfo("set_cmd_vel finally")
+            return
             
 
     def update_range(self, msg):
@@ -311,7 +309,7 @@ class FollowAction(object):
 
 
     def execute_cb_follow(self, goal):
-        rospy.loginfo("execute_cb_follow start")
+        
         self.last_target_time = rospy.Time.now()
         r = rospy.Rate(self.rate) 
         
@@ -321,23 +319,22 @@ class FollowAction(object):
         self._feedback.status = "FEEDBACK " + str(goal.signature)
         
         # publish info to the console for the user
-        #rospy.loginfo('%s: Executing, FollowAction of signature %i with feedback: %s' % (self._action_name, goal.signature, self._feedback.status))
-           
+        rospy.loginfo('%s: Executing, FollowAction of signature %i with feedback: %s' % (self._action_name, goal.signature, self._feedback.status))
+        self.track = goal.signature   
         # Begin the tracking loop
         while not rospy.is_shutdown():
-            # Acquire a lock while we're setting the robot speeds
-            self.lock.acquire()
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('%s: Preempted' % self._action_name)
-                self._result.outcome = str(self._action_name) + ": Preempted"
-                self._as.set_preempted(self._result, "Preempted Text")
+                self._result.outcome = "PREEMPTED"
+                self._as.set_preempted(self._result, "PREEMPTED")
                 success = False
                 return
 
+            # Acquire a lock while we're setting the robot speeds
+            self.lock.acquire()
             self.set_cmd_vel()
-
-            
+    
             try:
                 # If the target is not visible, stop the robot
                 if not self.target_visible:
@@ -345,17 +342,19 @@ class FollowAction(object):
                     duration = rospy.Time.now() - self.last_target_time 
 
                     if duration.to_sec() > self.follow_timeout:
-                        rospy.loginfo("CANCEL FOLLOWING: No target for %d sec...", duration.to_sec())
+                        
                         # Rotate to find target
                         self.move_cmd = Twist()
                         # self.move_cmd.angular.z = self.min_rotation_speed
-                        self._result.outcome = str(self._action_name) + ": CANCEL FOLLOWING: No target for " + str(duration.to_sec()) + "sec..."
+                        self._result.outcome = "CANCEL FOLLOWING: No target for " + str(duration.to_sec()) + "sec..."
+                        rospy.loginfo(self._result.outcome)
                         self._as.set_aborted(self._result, "Aborted - CANCEL FOLLOWING")
                         success = False
                         return
                     else:
-                        rospy.loginfo("WAITING FOR TARGET since %d sec...", duration.to_sec())
-                        self._feedback.status = "WAITING FOR TARGET since"
+                        self._feedback.status = "WAITING for target since " + str(duration.to_sec()) + " secs..."
+                        rospy.loginfo_throttle(1,self._feedback.status)
+                        
                         self.move_cmd = Twist()
         
                 else:

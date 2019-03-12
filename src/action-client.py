@@ -12,6 +12,9 @@ import actionlib
 # goal message and the result message.
 import playground_ros.msg
 
+def feedback_cb(feedback):
+    print('[Feedback] Follow status: %s'%(feedback.status))
+
 def follow_client():
     # Creates the SimpleActionClient, passing the type of the action
     # (FollowAction) to the constructor.
@@ -25,13 +28,17 @@ def follow_client():
     goal = playground_ros.msg.FollowGoal(signature=2)
 
     # Sends the goal to the action server.
-    client.send_goal(goal)
+    client.send_goal(goal, feedback_cb=feedback_cb)
 
     # Waits for the server to finish performing the action.
     client.wait_for_result()
 
     # Prints out the result of executing the action
-    return client.get_result()  # A FollowResult
+    client.get_result()  # A FollowResult
+    print('[Result] State: %d'%(client.get_state()))
+    print('[Result] Status Text: %s'%(client.get_goal_status_text()))
+    print('[Result] Outcome: %s'%(client.get_result().outcome))
+    
 
 if __name__ == '__main__':
     try:
@@ -55,7 +62,8 @@ if __name__ == '__main__':
             
         #     r.sleep()
 
-        result = follow_client()
-        print("Result:", ', ', result.outcome)
+        follow_client()
+        # result = follow_client()
+        # print("Result:", ', ', result.outcome)
     except rospy.ROSInterruptException:
         print("program interrupted before completion")

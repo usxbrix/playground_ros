@@ -44,6 +44,9 @@
 
 static int running = 0;
 
+using namespace playground_ros;
+typedef actionlib::SimpleActionClient<FollowAction> Client;
+
 class MyActionClient
 {
 public:
@@ -54,7 +57,12 @@ public:
     ROS_INFO("Action server started, sending goal.");
   }
 
-  static void on_pause_press(void)
+  void register_cb(void)
+  {
+    rc_button_set_callbacks(RC_BTN_PIN_PAUSE, this->on_pause_press, this->on_pause_release);
+  }
+
+  void on_pause_press(void)
   {
     printf("Pause Pressed - Sending goal\n");
 
@@ -74,13 +82,14 @@ public:
     else
       ROS_INFO("Action did not finish before the time out.");
 
-    printf("__on_pause_press done") return;
+    printf("__on_pause_press done");
+    //return;
   }
 
-  static void on_pause_release(void)
+  void on_pause_release(void)
   {
     printf("Pause Released\n");
-    return;
+    //return;
   }
 
   static void on_mode_press(void)
@@ -96,7 +105,8 @@ public:
   }
 
 private:
-  actionlib::SimpleActionClient<playground_ros::FollowAction> ac;
+  //actionlib::SimpleActionClient<playground_ros::FollowAction> ac;
+  Client ac;
 };
 
 // interrupt handler to catch ctrl-c
@@ -106,7 +116,7 @@ static void __signal_handler(__attribute__((unused)) int dummy)
   return;
 }
 
-int main()
+int main (int argc, char **argv)
 {
   // initialize pause and mode buttons
   if (rc_button_init(RC_BTN_PIN_PAUSE, RC_BTN_POLARITY_NORM_HIGH, RC_BTN_DEBOUNCE_DEFAULT_US))
@@ -138,9 +148,9 @@ int main()
 
 	MyActionClient my_ac;
   // Assign callback functions
-  rc_button_set_callbacks(RC_BTN_PIN_PAUSE, my_ac.on_pause_press(), my_ac.on_pause_release());
-  rc_button_set_callbacks(RC_BTN_PIN_MODE, my_ac.on_mode_press(), my_ac.on_mode_release());
-
+  // rc_button_set_callbacks(RC_BTN_PIN_PAUSE, &my_ac::on_pause_press, &my_ac::on_pause_release);
+  //rc_button_set_callbacks(RC_BTN_PIN_MODE, my_ac.on_mode_press, my_ac.on_mode_release);
+  my_ac.register_cb();
   // toggle leds till the program state changes
   printf("Press buttons to see response\n");
   while (running)

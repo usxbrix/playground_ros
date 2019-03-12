@@ -166,7 +166,7 @@ target_link_libraries(
 
 add_dependencies(
   follow_client_cpp
-  ${actionlib_tutorials_EXPORTED_TARGETS}
+  ${playground_ros_EXPORTED_TARGETS}
 )
 
 

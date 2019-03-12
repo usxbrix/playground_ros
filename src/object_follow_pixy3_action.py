@@ -74,7 +74,7 @@ class FollowAction(object):
         self.load_params()
         self._action_name = name
         #self._as = actionlib.SimpleActionServer(self._action_name, actionlib_tutorials.msg.FibonacciAction, execute_cb=self.execute_cb, auto_start = False)
-        self._as = actionlib.SimpleActionServer(self._action_name, playground_ros.msg.FollowAction, execute_cb=self.execute_cb, auto_start = False)
+        self._as = actionlib.SimpleActionServer(self._action_name, playground_ros.msg.FollowAction, execute_cb=self.execute_cb_follow, auto_start = False)
         self._as.start()
         rospy.loginfo('SimpleActionServer started')
 
@@ -172,7 +172,7 @@ class FollowAction(object):
         self.ring_buffer_x = collections.deque(maxlen=self.ring_buffer_size)
 
         # timeout before canceling follow if no target
-        self.follow_timeout = rospy.get_param("~follow_timeout", 1)
+        self.follow_timeout = rospy.get_param("~follow_timeout", 10)
 
     def update_block(self, msg):
         #for block in msg.blocks:
@@ -198,8 +198,8 @@ class FollowAction(object):
 
     def set_cmd_vel(self):
         # Acquire a lock while we're setting the robot speeds
-        self.lock.acquire()
-        
+        #self.lock.acquire()
+        rospy.loginfo("set_cmd_vel called")
         try:
             if self.target_visible:
 
@@ -259,7 +259,8 @@ class FollowAction(object):
 
         finally:
             # Release the lock
-            self.lock.release()
+            #self.lock.release()
+            rospy.loginfo("set_cmd_vel finally")
             
 
     def update_range(self, msg):
@@ -309,18 +310,18 @@ class FollowAction(object):
             self._as.set_succeeded(self._result)
 
 
-    def execute_cb_follow(self):
-
+    def execute_cb_follow(self, goal):
+        rospy.loginfo("execute_cb_follow start")
+        self.last_target_time = rospy.Time.now()
         r = rospy.Rate(self.rate) 
         
         success = True
         
         # append the seeds for the fibonacci sequence
-        self._feedback.status = "FEEDBACK " + `goal.signature` 
-
+        self._feedback.status = "FEEDBACK " + str(goal.signature)
         
         # publish info to the console for the user
-        rospy.loginfo('%s: Executing, FollowAction of signature %i with feedback: %s' % (self._action_name, goal.signature, self._feedback.status))
+        #rospy.loginfo('%s: Executing, FollowAction of signature %i with feedback: %s' % (self._action_name, goal.signature, self._feedback.status))
            
         # Begin the tracking loop
         while not rospy.is_shutdown():
@@ -348,6 +349,7 @@ class FollowAction(object):
                         self.move_cmd = Twist()
                         # self.move_cmd.angular.z = self.min_rotation_speed
                         success = False
+                        break
                     else:
                         rospy.loginfo("WAITING FOR TARGET since %d sec...", duration.to_sec())
                         self._feedback.status = "WAITING FOR TARGET since"
@@ -358,7 +360,7 @@ class FollowAction(object):
                 #     if (rospy.Time.now().to_sec() % 5) == 0:
                 #         rospy.loginfo("FALSE for ")
                 #         self.target_visible = False
-                    self._feedback.status = "FOLLOWING goal.signature "
+                    self._feedback.status = "FOLLOWING " + str(goal.signature)
                     
                 # Send the Twist command to the robot
                 self.cmd_vel_pub.publish(self.move_cmd)
@@ -395,7 +397,7 @@ if __name__ == '__main__':
     server = FollowAction(rospy.get_name())
 
     # test following
-    server.execute_cb_follow()
+    #server.execute_cb_follow()
     
     rospy.spin()
 

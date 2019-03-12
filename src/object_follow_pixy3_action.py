@@ -329,9 +329,10 @@ class FollowAction(object):
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('%s: Preempted' % self._action_name)
-                self._as.set_preempted()
+                self._result.outcome = str(self._action_name) + ": Preempted"
+                self._as.set_preempted(self._result, "Preempted Text")
                 success = False
-                break
+                return
 
             self.set_cmd_vel()
 
@@ -347,7 +348,10 @@ class FollowAction(object):
                         # Rotate to find target
                         self.move_cmd = Twist()
                         # self.move_cmd.angular.z = self.min_rotation_speed
+                        self._result.outcome = str(self._action_name) + ": CANCEL FOLLOWING: No target for " + str(duration.to_sec()) + "sec..."
+                        self._as.set_aborted(self._result, "Aborted - CANCEL FOLLOWING")
                         success = False
+                        return
                     else:
                         rospy.loginfo("WAITING FOR TARGET since %d sec...", duration.to_sec())
                         self._feedback.status = "WAITING FOR TARGET since"

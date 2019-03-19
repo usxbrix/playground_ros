@@ -10,13 +10,62 @@
 #include <signal.h>
 #include <rc/button.h>
 #include <rc/time.h>
+#include <rc/led.h>
 
+#include <ros/ros.h>
+#include <actionlib/client/simple_action_client.h>
+#include <actionlib/client/terminal_state.h>
+#include <playground_ros/FollowAction.h>
 
 static int running = 0;
 
+actionlib::SimpleActionClient<playground_ros::FollowAction> ac;
+
+/* 
+void doneCb(const actionlib::SimpleClientGoalState& state,
+            const FollowResultConstPtr& result)
+{
+  ROS_INFO("Finished in state [%s]", state.toString().c_str());
+  ROS_INFO("Answer: %i", result->sequence.back());
+  ros::shutdown();
+}
+
+// Called once when the goal becomes active
+void activeCb()
+{
+  ROS_INFO("Goal just went active");
+}
+
+// Called every time feedback is received for the goal
+void feedbackCb(const FollowFeedbackConstPtr& feedback)
+{
+  ROS_INFO("Got Feedback of length %lu", feedback->sequence.size());
+}
+*/
+
 static void __on_pause_press(void)
 {
-	printf("Pause Pressed\n");
+	printf("Pause Pressed - Sending goal\n");
+	rc_led_set(RC_LED_GREEN,1);
+
+    // send a goal to the action
+    playground_ros::FollowGoal goal;
+    goal.signature = 2;
+    ac.sendGoal(goal);
+
+    // wait for the action to return
+    bool finished_before_timeout = ac.waitForResult(ros::Duration(10.0));
+
+    if (finished_before_timeout)
+    {
+      actionlib::SimpleClientGoalState state = ac.getState();
+      ROS_INFO("Action finished: %s", state.toString().c_str());
+    }
+    else
+      ROS_INFO("Action did not finish before the time out.");
+
+    printf("__on_pause_press done");
+	rc_led_set(RC_LED_GREEN,0);
 	return;
 }
 
@@ -62,6 +111,18 @@ int main()
 	// set signal handler so the loop can exit cleanly
 	signal(SIGINT, __signal_handler);
 	running = 1;
+
+	ros::init(argc, argv, "follow_client_cpp");
+
+  	// create the action client
+  	// true causes the client to spin its own thread
+  	actionlib::SimpleActionClient<playground_ros::FollowAction> ac("object_follow_action", true);
+
+  	ROS_INFO("Waiting for action server to start.");
+  	// wait for the action server to start
+  	ac.waitForServer();  // will wait for infinite time
+
+  	ROS_INFO("Action server started, sending goal.");
 
 	// Assign callback functions
 	rc_button_set_callbacks(RC_BTN_PIN_PAUSE, __on_pause_press, __on_pause_release);

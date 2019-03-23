@@ -66,7 +66,7 @@ public:
 
   void on_pause_press(void)
   {
-    printf("Pause Pressed - Sending goal\n");
+    printf("pause function - Sending goal\n");
 
     // send a goal to the action
     playground_ros::FollowGoal goal;
@@ -84,7 +84,7 @@ public:
     else
       ROS_INFO("Action did not finish before the time out.");
 
-    printf("__on_pause_press done");
+    printf("pause function - done");
     //return;
   }
 
@@ -120,11 +120,18 @@ static void __signal_handler(__attribute__((unused)) int dummy)
 
 MyActionClient my_ac;
 
-void on_pause_release(void)
-  {
-    my_ac.on_pause_press();
-    printf("Pause Released\n");
-    //return;
+void __on_pause_press(void)
+{
+  my_ac.on_pause_press();
+  printf("Pause Pressed\n");
+  return;
+}
+
+void __on_mode_press(void)
+{
+  my_ac.on_mode_press();
+  printf("Mode Pressed\n");
+  return;
 }
 
 int main (int argc, char **argv)
@@ -160,8 +167,9 @@ int main (int argc, char **argv)
 	//MyActionClient my_ac;
   // Assign callback functions
   
-  // rc_button_set_callbacks(RC_BTN_PIN_PAUSE, NULL, &on_pause_release);
-  rc_button_set_callbacks(RC_BTN_PIN_MODE, &my_ac->on_mode_press, &my_ac->on_mode_release);
+  rc_button_set_callbacks(RC_BTN_PIN_PAUSE, &__on_pause_press, NULL);
+  rc_button_set_callbacks(RC_BTN_PIN_PAUSE, &__on_mode_press, NULL);
+  //rc_button_set_callbacks(RC_BTN_PIN_MODE, &my_ac->on_mode_press, &my_ac->on_mode_release);
   
   //my_ac.register_cb();
   // toggle leds till the program state changes

@@ -9,3 +9,18 @@ rosrun usb_cam usb_cam_node _framerate:=1 _pixel_format:=yuyv
 `rosrun playground_ros object_tracker_pixy2.py _track:=2 _min_rotation_speed:=1.8 _max_rotation_speed:5 _rate:=20 _x_threshold:=0.25 _search_delay:=3 _ring_buffer_size:=1`
 
 `rosrun playground_ros object_tracker_pixy2_follow.py _track:=2 _min_rotation_speed:=1.8 _max_rotation_speed:5 _rate:=20 _x_threshold:=0.5 _search_delay:=3 _ring_buffer_size:=1 _min_linear_speed:=0.15 _max_linear_speed:=0.364 _z_threshold:=0.02 _min_z:=0.02 _goal_z:=0.2`
+
+
+## Speech to action
+
+dialogflow_ros
+export GOOOGL...
+`rosrun dialogflow_ros mic_client.py`
+
+ speech is published as /dialogflow_text
+`rosrun playground_ros text2action.py`
+
+
+text2luma ros_luma_display
+
+`rosrun playground_ros string_to_luma.py`

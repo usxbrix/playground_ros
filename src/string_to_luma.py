@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
     string_to_luma.py - Version 0.1 2020 
@@ -12,6 +12,7 @@
 import rospy
 
 from std_msgs.msg import String, Int8
+from rosgraph_msgs.msg import Log
 
 # import thread
 # import collections
@@ -50,16 +51,17 @@ class String2luma(object):
     range = 0.0
 
     # Get a lock for updating the self.move_cmd values
-    lock = thread.allocate_lock()
+    # lock = thread.allocate_lock()
     
     # rev.1 users set port=0
     # substitute spi(device=0, port=0) below if using that interface
     serial = i2c()
 
     # substitute ssd1331(...) or sh1106(...) below if using that device
-    device = ssd1306()
+    #device = ssd1306()
+    device = sh1106()
     
-    term = terminal()
+    term = terminal(device)
 
     def __init__(self, name):
         self.load_params()
@@ -69,20 +71,28 @@ class String2luma(object):
         # Set the shutdown function (stop the robot)
         rospy.on_shutdown(self.shutdown)
         
-        rospy.loginfo("Setting up luma display...")
+        rospy.logdebug("setting up luma display")
         # rev.1 users set port=0
         # substitute spi(device=0, port=0) below if using that interface
         self.serial = i2c(port=1, address=0x3C)
 
         # substitute ssd1331(...) or sh1106(...) below if using that device
-        self.device = ssd1306(self.serial)
+        self.device = sh1106(self.serial, width=128, height=128 )
 
-        rospy.loginfo("Setting up luma display... DONE")
+        rospy.loginfo("luma display ready")
         #for fontname, size in [(None, None), ("tiny.ttf", 6), ("ProggyTiny.ttf", 16), ("creep.bdf", 16), ("miscfs_.ttf", 12), ("FreePixel.ttf", 12), ('ChiKareGo.ttf', 16)]:
-        #font = make_font(fontname, size) if fontname else None
-        self.term = terminal(self.device)
-        self.term.println("TERMINAL READY")
-        self.term.println("--------------")
+        font = make_font("miscfs_.ttf", 12)
+        #font = make_font('ChiKareGo.ttf', 16)
+        #font = make_font("ProggyTiny.ttf", 16)
+        #font = make_font("FreePixel.ttf", 12)
+        self.term = terminal(self.device,font,animate=False , word_wrap=True)
+        self.term.println("LUMA TERMINAL READY")
+        self.term.println("-------------------")
+        #self.term.puts("fast??\r\n")
+        #self.term.println("--------------")
+        #self.term.println("1")
+        #self.term.println("A very long new new new new line")
+
 
         # Publisher to control the robot's movement
         # self.cmd_vel_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
@@ -90,34 +100,39 @@ class String2luma(object):
 
 
         # Subscribe to topic 
-        rospy.Subscriber(self.topic, String, self.print_string, queue_size=100)
+        #rospy.Subscriber(self.topic, String, self.print_string, queue_size=100)
+        rospy.Subscriber("/rosout_agg", Log, self.print_string, queue_size=100)
                     
         # Wait for topic to become available
-        rospy.loginfo("Waiting for  topic...")
-        rospy.wait_for_message(self.topic, String)
+        rospy.logdebug("waiting for topic...")
+        #rospy.wait_for_message(self.topic, String)
+        rospy.wait_for_message("/rosout_agg", Log)
+        rospy.loginfo("Luma terminal ready")
                     
 
     
     def load_params(self):
         
         # What (class) should be tracked?
-        self.topic = rospy.get_param("~topic", "string")
+        self.topic = rospy.get_param("~topic", "~text")
         
-        # How often should we update the robot's motion?
         self.rate = rospy.get_param("~rate", 10)
 
-        # timeout before canceling follow if no target
-        self.follow_timeout = rospy.get_param("~follow_timeout", 10)
+        self.display_type = rospy.get_param("~type", "sh1106")
+        self.display_width = rospy.get_param("~width", 128)
+        self.display_height = rospy.get_param("~height", 64)
+        self.display_animation = rospy.get_param("~animation", False)
 
 
 
-    def print_string(self):
-        pass
+    def print_string(self,msg):
+        #self.term.println(str(msg.data))
+        self.term.println("{}: {}".format(msg.name, msg.msg))
     
 
 
     def shutdown(self):
-        rospy.loginfo("Stopping the robot...")
+        rospy.loginfo("stopping...")
 
         rospy.sleep(1)   
 
@@ -127,12 +142,12 @@ class String2luma(object):
 
 # main for 
 if __name__ == '__main__':
-    rospy.init_node('string_to_luma')
-    rospy.loginfo(rospy.get_caller_id() + " node started")
+    rospy.init_node('luma_terminal')
+    rospy.loginfo(rospy.get_name() + " node started")
     try:
          server = String2luma(rospy.get_name())
          rospy.spin()
-     except rospy.ROSInterruptException:
-         rospy.loginfo("String2luma node terminated.")
+    except rospy.ROSInterruptException:
+         rospy.loginfo(rospy.get_name() + "exit...")
 
 
